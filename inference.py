@@ -123,15 +123,13 @@ def main(args):
         question = data["question"]
         gold_answer = data["answer"]
 
-        num_samples = 16  # 생성할 답변 샘플의 수
-
         # vllm을 이용한 샘플 생성
         # print("\n>>> Generating samples with vllm...\n")
         sampling_params = SamplingParams(
             temperature=0.8,
             top_p=0.95,
             max_tokens=args.max_new_tokens,
-            n=args.num_samples  # ← 여기서 하나의 프롬프트에 대해 5개의 응답을 샘플링
+            n=args.num_samples 
         )
         # vllm은 프롬프트 문자열 리스트를 입력받으며, 각 프롬프트에 대해 여러 완성을 생성할 수 있음
         outputs = llm.generate([question], sampling_params)
@@ -153,7 +151,7 @@ def main(args):
         if embed_question.dim() == 1:
             embed_question = embed_question.unsqueeze(0)
         
-        batch_q = embed_question.repeat(num_samples, 1)
+        batch_q = embed_question.repeat(args.num_samples, 1)
 
         z, enc_mean, enc_logvar = encoder(batch_q, embed_answer_samples)
 
@@ -181,7 +179,7 @@ def main(args):
 
     path = args.output+args.data.split("/")[-1]
     os.makedirs(path, exist_ok=True)
-    output_file = f"{path}_generated_answer.json"
+    output_file = f"{path}/generated_answer.json"
     with open(output_file, "w") as f:
         json.dump(generated_answers, f, indent=4)
 

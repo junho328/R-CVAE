@@ -2,19 +2,20 @@
 
 # 인자 설정
 DATA="openai/gsm8k" # "openai/gsm8k", "EleutherAI/hendrycks_math"
-MODEL="meta-llama/Llama-3.1-8B-Instruct" # Qwen/Qwen2.5-14B-Instruct, "meta-llama/Llama-3.1-8B-Instruct"
-CVAE_CKPT="./output/checkpoint/mse_1.0_model_train.pth"
+MODEL="Qwen/Qwen2.5-14B-Instruct" # Qwen/Qwen2.5-14B-Instruct, "meta-llama/Llama-3.1-8B-Instruct"
+CVAE_CKPT="./output/checkpoint/kld_4.0_model_train.pth"
 EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2"
 BATCH_SIZE=32
 NUM_SAMPLES=16
-MAX_NEW_TOKENS=256
+MAX_NEW_TOKENS=512 # 512, 1024
 METHOD="mse"
 OUTPUT="./output/generated_answer/"
 
 # 로그 파일명 생성
-LOG_MODEL="llama"
+CVAE_TRAIN="kld_4.0"
+LOG_MODEL="qwen"
 LOG_DATA="gsm"
-LOG_FILE="cvae_${LOG_MODEL}_${LOG_DATA}_${METHOD}.log"
+LOG_FILE="cvae_${CVAE_TRAIN}_${LOG_MODEL}_${METHOD}_${LOG_DATA}_${MAX_NEW_TOKENS}tokens.log"
 
 {
   echo "=== Inference Baselines ==="

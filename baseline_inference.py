@@ -131,105 +131,158 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_name = args.model
+
+    # if args.method == "best":
+
+    #     llm = LLM(model_name, 
+    #             device=device, 
+    #             max_model_len=4096, 
+    #             dtype="bfloat16",
+    #             gpu_memory_utilization=0.7)
+        
+    # else:
+
     llm = LLM(model_name, 
-              device=device, 
-              max_model_len=4096, 
-              dtype="bfloat16",
-              gpu_memory_utilization=0.7)
+            device=device, 
+            max_model_len=4096, 
+            dtype="bfloat16")
 
     print("\n>>> Models loaded!\n")
 
-    all_generated_answers = []
-    all_expected_answers = []
-
-    num_batches = math.ceil(len(test_dataset) / batch_size)
-
-    # 4. 배치 단위로 처리
-    for i in tqdm(range(num_batches)):
-        # 문제와 정답 배치 추출
+    if args.method == "best":
+        
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        
+        reward_tokenizer = AutoTokenizer.from_pretrained(args.reward_model)
+        reward_model = AutoModelForSequenceClassification.from_pretrained(args.reward_model).to(device)
+        
+        print("\n>>> Reward Model loaded!\n")
 
         if args.data == "openai/gsm8k":
 
-            questions = test_dataset["question"][i * batch_size : (i + 1) * batch_size]
-            batch_expected = test_dataset["answer"][i * batch_size : (i + 1) * batch_size]
+            questions = test_dataset["question"]
+            gold_answers =  [answer.split("####")[-1].strip() for answer in test_dataset["answer"]]
 
         elif args.data == "EleutherAI/hendrycks_math":
 
-            questions = test_dataset["problem"][i * batch_size : (i + 1) * batch_size]
-            batch_expected = test_dataset["solution"][i * batch_size : (i + 1) * batch_size]
+            questions = test_dataset["problem"]
+            pattern = r'\\boxed\{([^}]*)\}'
+            gold_answers = [re.search(pattern, solution).group(1) for solution in test_dataset["solution"]]
 
-        elif args.data == "HuggingFaceH4/MATH-500":
+        correct = 0
 
-            questions = test_dataset["problem"][i * batch_size : (i + 1) * batch_size]
-            batch_expected = test_dataset["answer"][i * batch_size : (i + 1) * batch_size]
-
-        if args.method == "greedy":
-
-            # vllm 샘플링 파라미터 설정
-            params = SamplingParams(
-                        max_tokens=args.max_new_tokens,
-                        temperature=1.0,
-                    )
+        for question,gold_answer in tqdm(zip(questions, gold_answers)):
             
-        elif args.method == "beam":
+            sampling_params = SamplingParams(
+            temperature=0.8,
+            top_p=0.95,
+            max_tokens=args.max_new_tokens,
+            n=args.num_samples  # ← 여기서 하나의 프롬프트에 대해 5개의 응답을 샘플링
+            )
 
-            params = BeamSearchParams(beam_width=args.beam_width,
-                                    max_tokens=args.max_new_tokens)
+            llm_outputs = llm.generate([question], sampling_params)
 
-        elif args.method == "top_p": # Top-p sampling
-            
-            params = SamplingParams(
-                        max_tokens=args.max_new_tokens,
-                        temperature=args.temperature,
-                        top_p=args.top_p,
-                    )
-            
-        # chat_prompts = []
-        # for q in questions:
-        #     messages = [
-        #         {"role": "system", "content": qwen_system_prompt},
-        #         {"role": "user", "content": instruction.format(question=q)}
-        #     ]
-        #     # apply_chat_template을 이용해 chat 템플릿 적용 (문자열 생성)
-        #     chat_text = tokenizer.apply_chat_template(
-        #         messages,
-        #         tokenize=False,
-        #         add_generation_prompt=True
-        #     )
-        #     chat_prompts.append(chat_text)
+            print("\n>>> Generating samples complete!\n")
 
-        # outputs = llm.generate(chat_prompts, params)
+            answer_samples = []
+
+            for i,completion in enumerate(llm_outputs[0].outputs):
+                answer_samples.append(completion.text)
+
+            # 각 답변과 질문을 결합하여 입력 문자열 구성 (필요에 따라 형식을 조정)
+            input_texts = [question + "\n" + answer for answer in answer_samples]
+            inputs = reward_tokenizer(input_texts, return_tensors="pt", truncation=True, padding=True).to(device)
+
+            with torch.no_grad():
+                outputs = reward_model(**inputs)
+                # 모델의 출력 형태에 따라 score 추출 (예: 로짓의 두 번째 클래스 혹은 단일 값)
+                # 아래 예시는 로짓이 [batch_size, num_labels] 형태이고, 두 번째 클래스(logits[:, 1])가 긍정 점수라고 가정
+                if outputs.logits.shape[-1] > 1:
+                    scores = outputs.logits[:, 1]
+                else:
+                    scores = outputs.logits.squeeze(-1)
+            best_sample_idx = int(torch.argmax(scores, dim=0).item())
+            best_answer = answer_samples[best_sample_idx]
+
+            result = extract_verify_answer(best_answer,gold_answer)
+            correct += result
+
+            del llm_outputs, outputs, inputs, scores
         
-        # vllm을 이용하여 배치 단위 문장 생성
-        # 프롬프트 생성 (예: instruction 템플릿에 문제 삽입)
-        if args.method == "beam":
-            prompt_batch = [{"prompt": instruction.format(question=q)} for q in questions]
-            outputs = llm.beam_search(prompt_batch, params)
-            batch_generated = [output.sequences[0].text for output in outputs]
-        else:    
-            prompt_batch = [instruction.format(question=q) for q in questions]
-            outputs = llm.generate(prompt_batch, params)
-            batch_generated = [output.outputs[0].text for output in outputs]
-        
-        all_generated_answers.extend(batch_generated)
-        all_expected_answers.extend(batch_expected)
+        print(f"Accuracy: {correct / len(questions) * 100:.2f}%")
 
-        del outputs, prompt_batch, batch_generated, batch_expected
+    else:
 
-    if args.data == "openai/gsm8k":
-        all_expected_answers = [item.split("####")[-1].strip() for item in all_expected_answers]
+        all_generated_answers = []
+        all_expected_answers = []
 
-    elif args.data == "EleutherAI/hendrycks_math":
-        pattern = r'\\boxed\{([^}]*)\}'
-        all_expected_answers = [re.search(pattern, answer).group(1) for answer in all_expected_answers]
+        num_batches = math.ceil(len(test_dataset) / batch_size)
 
-    correct = 0
-    for idx,(gen,exp) in enumerate(zip(all_generated_answers, all_expected_answers)):
-        print(">>> Verifying {idx} answer\n")
-        result = extract_verify_answer(gen,exp)
-        correct += result
+        # 4. 배치 단위로 처리
+        for i in tqdm(range(num_batches)):
+            # 문제와 정답 배치 추출
 
-    print(f"Accuracy: {correct / len(all_expected_answers) * 100:.2f}%")
+            if args.data == "openai/gsm8k":
+
+                questions = test_dataset["question"][i * batch_size : (i + 1) * batch_size]
+                batch_expected = test_dataset["answer"][i * batch_size : (i + 1) * batch_size]
+
+            elif args.data == "EleutherAI/hendrycks_math":
+
+                questions = test_dataset["problem"][i * batch_size : (i + 1) * batch_size]
+                batch_expected = test_dataset["solution"][i * batch_size : (i + 1) * batch_size]
+
+            if args.method == "greedy":
+
+                # vllm 샘플링 파라미터 설정
+                params = SamplingParams(
+                            max_tokens=args.max_new_tokens,
+                            temperature=1.0,
+                        )
+                
+            elif args.method == "beam":
+
+                params = BeamSearchParams(beam_width=args.beam_width,
+                                        max_tokens=args.max_new_tokens)
+
+            elif args.method == "top_p": # Top-p sampling
+                
+                params = SamplingParams(
+                            max_tokens=args.max_new_tokens,
+                            temperature=args.temperature,
+                            top_p=args.top_p,
+                        )
+            
+            # vllm을 이용하여 배치 단위 문장 생성
+            # 프롬프트 생성 (예: instruction 템플릿에 문제 삽입)
+            if args.method == "beam":
+                prompt_batch = [{"prompt": instruction.format(question=q)} for q in questions]
+                outputs = llm.beam_search(prompt_batch, params)
+                batch_generated = [output.sequences[0].text for output in outputs]
+            else:    
+                prompt_batch = [instruction.format(question=q) for q in questions]
+                outputs = llm.generate(prompt_batch, params)
+                batch_generated = [output.outputs[0].text for output in outputs]
+            
+            all_generated_answers.extend(batch_generated)
+            all_expected_answers.extend(batch_expected)
+
+            del outputs, prompt_batch, batch_generated, batch_expected
+
+        if args.data == "openai/gsm8k":
+            all_expected_answers = [item.split("####")[-1].strip() for item in all_expected_answers]
+
+        elif args.data == "EleutherAI/hendrycks_math":
+            pattern = r'\\boxed\{([^}]*)\}'
+            all_expected_answers = [re.search(pattern, answer).group(1) for answer in all_expected_answers]
+
+        correct = 0
+        for idx,(gen,exp) in enumerate(zip(all_generated_answers, all_expected_answers)):
+            print(">>> Verifying {idx} answer\n")
+            result = extract_verify_answer(gen,exp)
+            correct += result
+
+        print(f"Accuracy: {correct / len(all_expected_answers) * 100:.2f}%")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -237,10 +290,11 @@ if __name__ == "__main__":
     parser.add_argument("--data", type=str, default="openai/gsm8k")
     parser.add_argument("--method", type=str, default="greedy")
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--beam_width", type=int, default=8)
     parser.add_argument("--top_p", type=float, default=0.95)
     parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--reward_model", type=str, default="trl-lib/Qwen2-0.5B-Reward")
     args = parser.parse_args()
 
     main(args)

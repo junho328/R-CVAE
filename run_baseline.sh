@@ -1,19 +1,19 @@
 #!/bin/bash
 
 # 인자 설정
-MODEL="meta-llama/Llama-3.1-8B-Instruct" # "Qwen/Qwen2.5-14B-Instruct", "meta-llama/Llama-3.1-8B-Instruct"
-DATA="EleutherAI/hendrycks_math" # "openai/gsm8k", "EleutherAI/hendrycks_math"
-METHOD="top_p"
-BATCH_SIZE=32
-MAX_NEW_TOKENS=512
+MODEL="Qwen/Qwen2.5-32B-Instruct" # "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "Qwen/Qwen2.5-32B-Instruct"
+DATA="openai/gsm8k" # "openai/gsm8k", "EleutherAI/hendrycks_math"
+METHOD="greedy" # greedy, top-p, best
+BATCH_SIZE=64
+MAX_NEW_TOKENS=512 # 512, 1024
 BEAM_WIDTH=8
 TOP_P=0.95
 TEMPERATURE=0.8
 
 # 로그 파일명 설정
-LOG_MODEL="llama"
-LOG_DATA="math"
-LOG_FILE="baseline_${LOG_MODEL}_${LOG_DATA}_${METHOD}.log"
+LOG_MODEL="qwen32"
+LOG_DATA="gsm"
+LOG_FILE="baseline_${LOG_MODEL}_${METHOD}_${LOG_DATA}_${MAX_NEW_TOKENS}tokens.log"
 
 # 변수 설정 로그 출력
 {

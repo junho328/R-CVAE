@@ -4,18 +4,19 @@
 DATA="gsm_math"
 LOAD=true
 EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2"
-BATCH_SIZE=128
+Z_DIM=128
+BATCH_SIZE=256
 CVAE_EPOCHS=1000
 CVAE_LR=1e-4
 KL_WEIGHT=4.0
-RATIONALE_METHOD="kld"
+RATIONALE_METHOD="mse"
 RATIONALE_EPOCHS=1000
 RATIONALE_LR=1e-4
 OUTPUT="./output"
 
 # 로그 파일명 설정 (data와 method 기반)
 LOG_DATA="gsm_math"
-LOG_FILE="train_${LOG_DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}.log"
+LOG_FILE="train_${LOG_DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}_z${Z_DIM}.log"
 
 # 변수 설정 로그 출력
 {
@@ -23,6 +24,7 @@ LOG_FILE="train_${LOG_DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}.log"
   echo "DATA: $DATA"
   echo "LOAD: $LOAD"
   echo "EMBED_MODEL: $EMBED_MODEL"
+  echo "Z_DIM: $Z_DIM"
   echo "BATCH_SIZE: $BATCH_SIZE"
   echo "CVAE_EPOCHS: $CVAE_EPOCHS"
   echo "CVAE_LR: $CVAE_LR"
@@ -39,6 +41,7 @@ nohup python train.py \
     --data "$DATA" \
     --load "$LOAD" \
     --embed_model "$EMBED_MODEL" \
+    --z_dim $Z_DIM \
     --batch_size $BATCH_SIZE \
     --cvae_epochs $CVAE_EPOCHS \
     --cvae_lr $CVAE_LR \

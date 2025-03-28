@@ -178,7 +178,7 @@ def main(args):
 
     q_dim = 384         # 질문 임베딩 차원
     r_dim = 384         # 근거 임베딩 차원
-    latent_dim = 256    # 잠재 공간 차원 (reasoning skill)
+    latent_dim = args.z_dim         # 잠재 공간 차원
     r_emb_dim = 384     # Decoder 출력 차원
 
     encoder = Encoder(q_dim, r_dim, latent_dim)
@@ -253,7 +253,7 @@ def main(args):
     }
 
     os.makedirs(checkpoint_path, exist_ok=True)
-    torch.save(checkpoint, checkpoint_path + f'{args.rationale_train_method}_{args.kl_weight}_model_train.pth')
+    torch.save(checkpoint, checkpoint_path + f'{args.rationale_train_method}_{args.kl_weight}_z{args.z_dim}_model_train.pth')
 
     print(">>>Model saved successfully!")
 
@@ -263,7 +263,8 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default="gsm_math" ,help='training data')
     parser.add_argument('--load', type=bool, default=True, help='Load embeddings')
     parser.add_argument('--embed_model', type=str, default='sentence-transformers/all-MiniLM-L6-v2')
-    parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
+    parser.add_argument("--z_dim", type=int, default=256, help="Dimension of the latent space")
+    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
     parser.add_argument('--cvae_epochs', type=int, default=1000, help='Number of epochs to train the CVAE')
     parser.add_argument('--cvae_lr', type=float, default=1e-4, help='Learning rate for the CVAE')
     parser.add_argument('--kl_weight', type=float, default=4.0, help='KL divergence weight')
