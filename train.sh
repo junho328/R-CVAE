@@ -4,19 +4,20 @@
 DATA="gsm_math"
 LOAD=true
 EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2"
-Z_DIM=128
-BATCH_SIZE=256
+
+BATCH_SIZE=1024
 CVAE_EPOCHS=1000
 CVAE_LR=1e-4
-KL_WEIGHT=4.0
-RATIONALE_METHOD="mse"
 RATIONALE_EPOCHS=1000
 RATIONALE_LR=1e-4
 OUTPUT="./output"
 
-# 로그 파일명 설정 (data와 method 기반)
-LOG_DATA="gsm_math"
-LOG_FILE="train_${LOG_DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}_z${Z_DIM}.log"
+Z_DIM=128
+KL_WEIGHT=7.0
+RATIONALE_METHOD="kld"
+DEVICE="cuda"
+
+LOG_FILE="train_${DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}_z${Z_DIM}.log"
 
 # 변수 설정 로그 출력
 {
@@ -33,6 +34,7 @@ LOG_FILE="train_${LOG_DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}_z${Z_DIM}.log"
   echo "RATIONALE_EPOCHS: $RATIONALE_EPOCHS"
   echo "RATIONALE_LR: $RATIONALE_LR"
   echo "OUTPUT: $OUTPUT"
+  echo "DEVICE: $DEVICE"
   echo "==========================="
 } > "./log/${LOG_FILE}"
 
@@ -50,4 +52,5 @@ nohup python train.py \
     --rationale_epochs $RATIONALE_EPOCHS \
     --rationale_lr $RATIONALE_LR \
     --output "$OUTPUT" \
+    --device "$DEVICE" \
     > "./log/${LOG_FILE}" 2>&1 &

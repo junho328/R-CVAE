@@ -126,6 +126,10 @@ def main(args):
 
         test_dataset = load_dataset("HuggingFaceH4/MATH-500", split="test")
 
+    elif args.data == "Maxwell-Jia/AIME_2024":
+
+        test_dataset = load_dataset("Maxwell-Jia/AIME_2024", split="train")
+
     batch_size = args.batch_size
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -142,10 +146,20 @@ def main(args):
         
     # else:
 
+    # if args.model == "mistralai/Mistral-Small-24B-Instruct-2501":
+    #     llm = LLM(model="mistralai/Mistral-Small-24B-Instruct-2501",
+    #               tokenizer_mode="mistral",
+    #               config_format="mistral",
+    #               load_format="mistral",
+    #               dtype="bfloat16",
+    #               device=device,
+    #               max_model_len=4096)
+
+    # else: 
     llm = LLM(model_name, 
-            device=device, 
-            max_model_len=4096, 
-            dtype="bfloat16")
+        device=device, 
+        max_model_len=4096, 
+        dtype="bfloat16")
 
     print("\n>>> Models loaded!\n")
 
@@ -168,6 +182,16 @@ def main(args):
             questions = test_dataset["problem"]
             pattern = r'\\boxed\{([^}]*)\}'
             gold_answers = [re.search(pattern, solution).group(1) for solution in test_dataset["solution"]]
+
+        elif args.data == "HuggingFaceH4/MATH-500":
+
+            questions = test_dataset["problem"]
+            gold_answers = test_dataset["answer"]
+
+        elif args.data == "Maxwell-Jia/AIME_2024":
+
+            questions = test_dataset["Problem"]
+            gold_answers = test_dataset["Answer"]
 
         correct = 0
 
@@ -231,6 +255,16 @@ def main(args):
 
                 questions = test_dataset["problem"][i * batch_size : (i + 1) * batch_size]
                 batch_expected = test_dataset["solution"][i * batch_size : (i + 1) * batch_size]
+
+            elif args.data == "HuggingFaceH4/MATH-500":
+
+                questions = test_dataset["problem"][i * batch_size : (i + 1) * batch_size]
+                batch_expected = test_dataset["answer"][i * batch_size : (i + 1) * batch_size]
+
+            elif args.data == "Maxwell-Jia/AIME_2024":
+
+                questions = test_dataset["Problem"][i * batch_size : (i + 1) * batch_size]
+                batch_expected = test_dataset["Answer"][i * batch_size : (i + 1) * batch_size]
 
             if args.method == "greedy":
 

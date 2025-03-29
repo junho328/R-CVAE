@@ -170,6 +170,8 @@ def main(args):
 
     # 3. CVAE & Rationale Model Training
 
+    device = args.device
+
     embed_output = args.output + "/embeddings"
     question_embeddings = np.load(embed_output + f"/{args.data}_question_embeddings.npy")
     rationale_embeddings = np.load(embed_output + f"/{args.data}_rationale_embeddings.npy")
@@ -181,9 +183,9 @@ def main(args):
     latent_dim = args.z_dim         # 잠재 공간 차원
     r_emb_dim = 384     # Decoder 출력 차원
 
-    encoder = Encoder(q_dim, r_dim, latent_dim)
-    decoder = Decoder(q_dim, latent_dim, r_emb_dim)
-    reasoning_policy = ReasoningPolicy(q_dim, latent_dim)
+    encoder = Encoder(q_dim, r_dim, latent_dim).to(device)
+    decoder = Decoder(q_dim, latent_dim, r_emb_dim).to(device)
+    reasoning_policy = ReasoningPolicy(q_dim, latent_dim).to(device)
 
     optimizer_cvae = optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr=args.cvae_lr)
     optimizer_policy = optim.Adam(reasoning_policy.parameters(), lr=args.rationale_lr)
@@ -212,6 +214,10 @@ def main(args):
         total_loss = 0.0
         num_batches = 0
         for batch_q, batch_r in dataloader:
+
+            batch_q = batch_q.to(device)
+            batch_r = batch_r.to(device)
+
             loss = train_cvae_step(encoder, decoder, optimizer_cvae, batch_q, batch_r)
             total_loss += loss
             num_batches += 1
@@ -228,6 +234,10 @@ def main(args):
         total_loss = 0.0
         num_batches = 0
         for batch_q, batch_r in dataloader:
+            
+            batch_q = batch_q.to(device)
+            batch_r = batch_r.to(device)
+
             loss = train_policy_step(encoder, reasoning_policy, optimizer_policy, batch_q, batch_r)
             total_loss += loss
             num_batches += 1
@@ -264,7 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('--load', type=bool, default=True, help='Load embeddings')
     parser.add_argument('--embed_model', type=str, default='sentence-transformers/all-MiniLM-L6-v2')
     parser.add_argument("--z_dim", type=int, default=256, help="Dimension of the latent space")
-    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
+    parser.add_argument('--batch_size', type=int, default=1024, help='Batch size for training')
     parser.add_argument('--cvae_epochs', type=int, default=1000, help='Number of epochs to train the CVAE')
     parser.add_argument('--cvae_lr', type=float, default=1e-4, help='Learning rate for the CVAE')
     parser.add_argument('--kl_weight', type=float, default=4.0, help='KL divergence weight')
@@ -272,6 +282,7 @@ if __name__ == '__main__':
     parser.add_argument('--rationale_epochs', type=int, default=1000, help='Number of epochs to train the Rationale')
     parser.add_argument('--rationale_lr', type=float, default=1e-4, help='Learning rate for the Rationale')
     parser.add_argument('--output', type=str, default="./output", help='Path to the output model')
+    parser.add_argument('--device', type=str, default='cuda', help='Device to use for training (cpu or cuda)')
     args = parser.parse_args()
 
     main(args)

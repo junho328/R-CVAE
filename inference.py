@@ -77,6 +77,18 @@ def main(args):
         pattern = r'\\boxed\{([^}]*)\}'
         gold_answers = [re.search(pattern, solution).group(1) for solution in test_dataset["solution"]]
 
+    elif args.data == "HuggingFaceH4/MATH-500":
+        test_dataset = load_dataset("HuggingFaceH4/MATH-500", split="test")
+
+        questions = test_dataset["question"]
+        gold_answers = test_dataset["answer"]
+
+    elif args.data == "Maxwell-Jia/AIME_2024":
+        test_dataset = load_dataset("Maxwell-Jia/AIME_2024", split="train")
+
+        questions = test_dataset["Problem"]
+        gold_answers = test_dataset["Answer"]
+
     test_dataset = TestDataset(questions, gold_answers)
     # batch_size = args.batch_size
     # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
@@ -87,7 +99,7 @@ def main(args):
 
     q_dim = 384         # 질문 임베딩 차원
     r_dim = 384         # 근거 임베딩 차원
-    latent_dim = 256    # 잠재 공간 차원 (reasoning skill)
+    latent_dim = args.z_dim    # 잠재 공간 차원 (reasoning skill)
     r_emb_dim = 384     # Decoder 출력 차원
 
     encoder = Encoder(q_dim, r_dim, latent_dim)
@@ -160,7 +172,7 @@ def main(args):
             diff = ((z - z_hat.unsqueeze(0)) ** 2).mean(dim=1)
             best_sample_idx = torch.argmin(diff).item()
             best_answer = answer_samples[best_sample_idx]
-        else:
+        else: # kld
             # 각 샘플별 평균 차이를 계산 후 최소 차이 샘플 선택
             diff = abs(enc_mean - rationale_mean).mean(dim=1)
             best_sample_idx = torch.argmin(diff).item()
@@ -191,6 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default="openai/gsm8k" ,help='test data')
     parser.add_argument('--model', type=str, default='meta-llama/Llama-3.1-8B-Instruct', help='Test model')
     parser.add_argument('--cvae_ckpt', type=str, default="./output/checkpoint/kld_1.0_model_train.pth", help='Trained CVAE checkpoint')
+    parser.add_argument('--z_dim', type=int, default=256)
     parser.add_argument('--embed_model', type=str, default='sentence-transformers/all-MiniLM-L6-v2')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for generation')
     parser.add_argument('--num_samples', type=int, default=16, help='Number of samples to generate')
