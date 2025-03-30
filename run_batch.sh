@@ -5,16 +5,17 @@ DATA="openai/gsm8k" # "openai/gsm8k", "EleutherAI/hendrycks_math"
 MODEL="Qwen/Qwen2.5-14B-Instruct" # "HuggingFaceTB/SmolLM2-1.7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "mistralai/Mistral-Small-24B-Instruct-2501"
 
 EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2"
-BATCH_SIZE=32
 
+BATCH_SIZE=4
 NUM_SAMPLES=16
+
 MAX_NEW_TOKENS=512
 
 METHOD="mse"
 OUTPUT="./output/generated_answer/"
 
-CVAE_CKPT="./output/checkpoint/kld_4.0_z128_model_train.pth" # "./output/checkpoint/kld_4.0_model_train.pth", "./output/checkpoint/kld_4.0_z128_model_train.pth"
-Z_DIM=128 # 128, 256
+CVAE_CKPT="./output/checkpoint/kld_4.0_model_train.pth" # "./output/checkpoint/kld_4.0_model_train.pth", "./output/checkpoint/kld_4.0_z128_model_train.pth"
+Z_DIM=256 # 128, 256
 
 TOP_P=0.9 # 0.9, 0.95
 TEMPERATURE=0.8 # 0.6, 0.8
@@ -51,7 +52,7 @@ do
 
   echo ">>> Run ${RUN} 시작됨. 로그: ${LOG_FILE}"
 
-  nohup python -u inference.py \
+  nohup python -u batch_inference.py \
       --data "$DATA" \
       --model "$MODEL" \
       --cvae_ckpt "$CVAE_CKPT" \

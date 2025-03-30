@@ -117,8 +117,8 @@ def main(args):
     llm = LLM(model_name, 
               device=device, 
               max_model_len=4096, 
-              dtype="bfloat16")
-            #   gpu_memory_utilization=0.8)
+              dtype="bfloat16",
+              gpu_memory_utilization=args.gpu_memory_utilization)
 
     embed_model = SentenceTransformer(args.embed_model)
 
@@ -138,8 +138,8 @@ def main(args):
         # vllm을 이용한 샘플 생성
         # print("\n>>> Generating samples with vllm...\n")
         sampling_params = SamplingParams(
-            temperature=0.8,
-            top_p=0.95,
+            temperature=args.temperature,
+            top_p=args.top_p,
             max_tokens=args.max_new_tokens,
             n=args.num_samples 
         )
@@ -187,7 +187,7 @@ def main(args):
         del answer_samples, embed_answer_samples, embed_question, rationale_input
 
     print(f"Split error: {split_error}")
-    print(f"Accuracy: {correct / len(test_dataset) * 100:.2f}%")
+    print(f"Accuracy: {correct / len(test_dataset) * 100:.2f}%", flush=True)
 
     path = args.output+args.data.split("/")[-1]
     os.makedirs(path, exist_ok=True)
@@ -208,8 +208,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for generation')
     parser.add_argument('--num_samples', type=int, default=16, help='Number of samples to generate')
     parser.add_argument('--max_new_tokens', type=int, default=256, help='Max length for generation')
+    parser.add_argument("--top_p", type=float, default=0.95)
+    parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument('--method', type=str, default='mse', help='Method for selecting the best sample')
     parser.add_argument('--output', type=str, default='./output/generated_answer/', help='Model generated answer')
+    parser.add_argument('--gpu_memory_utilization', type=float, default=0.9, help='GPU memory utilization for vllm')
     args = parser.parse_args()
 
     main(args)

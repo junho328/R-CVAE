@@ -9,19 +9,6 @@ import os
 import argparse
 import re
 
-# qwen_system_prompt = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant that solves math problems step-by-step with clear reasoning."
-
-# instruction = """
-# Your task:
-# 1. Break down the solution into clear, logical steps.
-# 2. The last line of your response should be of the form "####Answer: $ANSWER" where $ANSWER is the answer to the problem.
-
-# **Question**:
-# {question}
-
-# **Answer**:
-# """
-
 instruction = """
 You are a helpful assistant that solves math problems step-by-step with clear reasoning.
 Your task:
@@ -34,46 +21,6 @@ Your task:
 **Answer**:
 """
 
-# instruction = '''
-# You are a helpful assistant that solves math problems step-by-step with clear reasoning.
-# Your task:
-# 1. Break down the solution into clear, logical steps.
-# 2. Always include a "Final answer:" section.
-# 3. The **final answer** must be written strictly on the line **immediately following** "Final answer:" and must start with "####".
-# 4. After "####", write **only the final result** without any extra words, symbols, or punctuation.
-# 5. Absolutely do not include any additional text or commentary outside these steps or in the final answer.
-
-# Here are examples:
-# # Example 1
-# **Question:**
-# Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?
-
-# **Answer:**
-# Natalia sold 48/2 = <<48/2=24>>24 clips in May. 
-# Natalia sold 48+24 = <<48+24=72>>72 clips altogether in April and May
-
-# **Final answer:
-# ####72**
-
-# # Example 2
-# **Question:**
-# On a particular day in Salt Lake, UT, the temperature was given by $-t^2 +12t+50$ where $t$ is the time in hours past noon. What is the largest $t$ value at which the temperature was exactly 77 degrees?
-
-# **Answer:**
-# We set the temperature equal to 77 degrees: \begin{align*}
-# -t^2 +12t+50&=77\\
-# t^2-12t+27&=0\\
-# (t-3)(t-9)&=0
-# \end{align*}
-# We see then that the temperature is 77 degrees exactly twice: at $t=3$ and $t=9$, so our answer is $\boxed{9}$.
-# x
-# **Final answer:
-# ####9**
-
-# Now, solve the following problem:
-# **Question:**
-# '''
-
 from math_verify import verify,parse
 
 def extract_verify_answer(pred, label):
@@ -82,9 +29,6 @@ def extract_verify_answer(pred, label):
     except:
         print("Split error")
         return False
-    
-    print(f"Model Generated Answer : {pred}")
-    print(f"Gold Label Answer : {label}")
 
     try:
         gold = parse(label)
@@ -316,7 +260,7 @@ def main(args):
             result = extract_verify_answer(gen,exp)
             correct += result
 
-        print(f"Accuracy: {correct / len(all_expected_answers) * 100:.2f}%")
+        print(f"Accuracy: {correct / len(all_expected_answers) * 100:.2f}%", flush=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
