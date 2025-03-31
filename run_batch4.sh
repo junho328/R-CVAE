@@ -2,7 +2,7 @@
 
 # 인자 설정
 DATA="openai/gsm8k" # "openai/gsm8k", "EleutherAI/hendrycks_math"
-MODEL="HuggingFaceTB/SmolLM2-1.7B-Instruct" # "HuggingFaceTB/SmolLM2-1.7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "mistralai/Mistral-Small-24B-Instruct-2501"
+MODEL="mistralai/Mistral-Small-24B-Instruct-2501" # "HuggingFaceTB/SmolLM2-1.7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "mistralai/Mistral-Small-24B-Instruct-2501"
 
 EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2"
 
@@ -14,7 +14,7 @@ MAX_NEW_TOKENS=512
 METHOD="mse"
 OUTPUT="./output/generated_answer/"
 
-CVAE_CKPT="./output/checkpoint/kld_7.0_z256_model_train.pth" # "./output/checkpoint/kld_4.0_model_train.pth", "./output/checkpoint/kld_7.0_z256_model_train.pth"
+CVAE_CKPT="./output/checkpoint/kld_4.0_model_train.pth" # "./output/checkpoint/kld_4.0_model_train.pth", "./output/checkpoint/kld_4.0_z128_model_train.pth"
 Z_DIM=256 # 128, 256
 
 TOP_P=0.95 # 0.9, 0.95
@@ -23,8 +23,8 @@ TEMPERATURE=0.8 # 0.6, 0.8
 GPU_MEMORY=0.9 # 0.8, 0.9
 
 # 로그 관련 설정
-CVAE_TRAIN="kld_7.0"
-LOG_MODEL="smol"
+CVAE_TRAIN="kld_4.0"
+LOG_MODEL="mistral"
 LOG_DATA="gsm"
 
 # 3회 반복 실행
