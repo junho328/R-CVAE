@@ -2,18 +2,19 @@
 
 SEED=42 # 42,43,44
 
-DATA="openai/gsm8k" # "openai/gsm8k", "EleutherAI/hendrycks_math"
-LOG_DATA="gsm"
+DATA="EleutherAI/hendrycks_math" # "openai/gsm8k", "EleutherAI/hendrycks_math"
+LOG_DATA="math"
 
-MODEL="HuggingFaceTB/SmolLM2-1.7B-Instruct" # "HuggingFaceTB/SmolLM2-1.7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "mistralai/Mistral-Small-24B-Instruct-2501"
-LOG_MODEL="smol" # "smol", "llama", "qwen", "mistral"
+# "meta-llama/Llama-3.2-1B-Instruct"
+MODEL="meta-llama/Llama-3.2-1B-Instruct" # "HuggingFaceTB/SmolLM2-1.7B-Instruct", "meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "mistralai/Mistral-Small-24B-Instruct-2501"
+LOG_MODEL="llama1b" # "smol", "llama", "qwen", "mistral"
 
 EMBED_MODEL="jinaai/jina-embeddings-v3" # "jinaai/jina-embeddings-v3" , "sentence-transformers/all-MiniLM-L6-v2"
 
 BATCH_SIZE=2
 NUM_SAMPLES=16
 
-MAX_NEW_TOKENS=512
+MAX_NEW_TOKENS=1024
 
 METHOD="mse"
 OUTPUT="./output/generated_answer/"
@@ -28,7 +29,7 @@ LATENT_DIM=256 # 128, 256
 TOP_P=0.9 # 0.9, 0.95
 TEMPERATURE=0.7 # 0.6, 0.8
 
-GPU_MEMORY=0.9 # 0.8, 0.9
+GPU_MEMORY=0.3 # 0.8, 0.9
 
 LOG_FILE="cvae_z${LATENT_DIM}_${CVAE_TRAIN}_${LOG_MODEL}_${METHOD}_${LOG_DATA}_${MAX_NEW_TOKENS}tokens_seed${SEED}.log"
 
@@ -51,7 +52,7 @@ LOG_FILE="cvae_z${LATENT_DIM}_${CVAE_TRAIN}_${LOG_MODEL}_${METHOD}_${LOG_DATA}_$
   echo "==============================="
 } > "./log/cvae/${LOG_MODEL}/${LOG_FILE}"
 
-nohup python -u batch_inference.py \
+nohup python -u encoder_inference.py \
     --seed $SEED \
     --data "$DATA" \
     --model "$MODEL" \

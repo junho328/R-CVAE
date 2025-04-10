@@ -32,13 +32,13 @@ def main(args):
 
     # 4. 학습 인자 설정
     training_args = PRMConfig(
-        num_train_epochs=2,
+        num_train_epochs=1,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=2e-5,
         logging_steps=10,
         save_steps=1000,
-        output_dir=args.output_dir,
+        output_dir=None,
     )
 
     # 5. RewardTrainer 초기화

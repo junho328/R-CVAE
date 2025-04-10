@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from model import Encoder, Decoder, ReasoningPolicy
 from tqdm import tqdm
 from math_verify import parse, verify
+import math
 
 from vllm import LLM, SamplingParams
 
@@ -49,7 +50,7 @@ def extract_verify_answer(pred, label):
     global split_error
 
     try:
-        pred = pred.split("####Answer:")[-1]
+        pred = pred.split("####")[-1]
     except:
         print("Split error")
         split_error += 1
@@ -157,7 +158,6 @@ def main(args):
 
         batch_questions = batch["question"]
         batch_gold_answers = batch["answer"]
-
         total_samples += len(batch_questions)
 
         sampling_params = SamplingParams(
@@ -174,9 +174,6 @@ def main(args):
         task = "separation"
         embed_questions = torch.Tensor(embed_model.encode(batch_questions, task=task, prompt_name=task, truncate_dim=args.embed_dim))
         
-        # reasoning_policy가 배치 입력을 지원한다고 가정
-        z_hats, rationale_means, _ = reasoning_policy(q=embed_questions)
-
         # 각 질문별 생성된 샘플 텍스트를 리스트로 정리
         answer_samples_list = []
         for output in outputs_batch:
@@ -188,8 +185,8 @@ def main(args):
         embed_answer_samples = torch.Tensor(embed_model.encode(flattened_samples, task=task, prompt_name=task, truncate_dim=args.embed_dim))
 
         # 배치 내 각 질문에 대해 최적의 답변 선택
-        for idx, (question, gold_answer, samples) in enumerate(
-            zip(batch_questions, batch_gold_answers, answer_samples_list)
+        for idx, (gold_answer, samples) in enumerate(
+            zip(batch_gold_answers, answer_samples_list)
         ):
             # 현재 질문에 해당하는 샘플 인덱스 계산
             start_idx = idx * args.num_samples
@@ -198,30 +195,35 @@ def main(args):
 
             # 질문 임베딩을 각 샘플 개수만큼 복제
             q_embed = embed_questions[idx].unsqueeze(0).repeat(args.num_samples, 1)
-            z, enc_mean, _ = encoder(q_embed, answer_embeddings)
+            z, enc_mean, logvar = encoder(q_embed, answer_embeddings)
 
-            if args.method == "mse":
-                # MSE 기준 최적 샘플 선택
-                diff = ((z - z_hats[idx].unsqueeze(0)) ** 2).mean(dim=1)
-                best_sample_idx = torch.argmin(diff).item()
-                best_answer = samples[best_sample_idx]
-            else:  # kld 방식
-                diff = abs(enc_mean - rationale_means[idx]).mean(dim=1)
-                best_sample_idx = torch.argmin(diff).item()
-                best_answer = samples[best_sample_idx]
+            norms = enc_mean.norm(dim=1)              # 각 샘플별 enc_mean 노름
+            best_sample_idx = torch.argmin(norms).item()
+            best_answer = samples[best_sample_idx]
+
+            # 각 샘플에 대해 가우시안 분포의 엔트로피 계산
+            # diagonal Gaussian의 엔트로피: 0.5 * sum(log(2 * pi * e * sigma^2))
+            # 여기서 sigma^2 = exp(logvar)이므로, 엔트로피 = 0.5 * (dim * log(2*pi*e) + sum(logvar))
+            # dim = logvar.shape[1]
+            # constant = 0.5 * dim * math.log(2 * math.pi * math.e)
+            # entropy = constant + 0.5 * torch.sum(logvar, dim=1)
+
+            # # 엔트로피가 가장 낮은 샘플 선택
+            # best_sample_idx = torch.argmin(entropy).item()
+            # best_answer = samples[best_sample_idx]
 
             result = extract_verify_answer(best_answer, gold_answer)
             correct += result
 
             # 메모리 해제 (필요시)
-            del answer_embeddings, q_embed
+            del answer_embeddings, q_embed, z, enc_mean, logvar, norms
 
         print(f"Accuracy: {correct / total_samples * 100:.2f}%", flush=True)
 
         # 배치 처리 후 임베딩 변수 해제
         del embed_questions, embed_answer_samples, answer_samples_list, flattened_samples, outputs_batch
 
-    print(f"Split error: {split_error}", flush=True)
+    print(f"Split error: {split_error}",flush=True)
     print(f"Accuracy: {correct / len(test_dataset) * 100:.2f}%", flush=True)
 
     # path = args.output+args.data.split("/")[-1]
@@ -245,8 +247,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for generation')
     parser.add_argument('--num_samples', type=int, default=16, help='Number of samples to generate')
     parser.add_argument('--max_new_tokens', type=int, default=256, help='Max length for generation')
-    parser.add_argument("--top_p", type=float, default=0.95)
-    parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--top_p", type=float, default=0.9)
+    parser.add_argument("--temperature", type=float, default=0.7)
     parser.add_argument('--method', type=str, default='mse', help='Method for selecting the best sample')
     parser.add_argument('--output', type=str, default='./output/generated_answer/', help='Model generated answer')
     parser.add_argument('--gpu_memory_utilization', type=float, default=0.9, help='GPU memory utilization for vllm')

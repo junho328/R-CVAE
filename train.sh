@@ -1,31 +1,33 @@
 #!/bin/bash
 
 # 인자 설정
-DATA="gsm_math"
-LOAD=true
-EMBED_MODEL="sentence-transformers/all-MiniLM-L6-v2"
+DATA="gsm" # "gsm", "math", "numina"
 
-BATCH_SIZE=1024
-CVAE_EPOCHS=1000
+EMBED_MODEL="jinaai/jina-embeddings-v3" # jinaai/jina-embeddings-v3
+EMBED_DIM=1024 # 384, 1024
+EMBED_ID="jina"
+
+BATCH_SIZE=256
+CVAE_EPOCHS=100
 CVAE_LR=1e-4
-RATIONALE_EPOCHS=1000
+RATIONALE_EPOCHS=100
 RATIONALE_LR=1e-4
 OUTPUT="./output"
 
-Z_DIM=128
-KL_WEIGHT=7.0
+LATENT_DIM=256
+KL_WEIGHT=1.0
 RATIONALE_METHOD="kld"
 DEVICE="cuda"
 
-LOG_FILE="train_${DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}_z${Z_DIM}.log"
+LOG_FILE="train_${EMBED_ID}_${DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}_z${LATENT_DIM}.log"
 
 # 변수 설정 로그 출력
 {
   echo "=== Training CVAE Model ==="
   echo "DATA: $DATA"
-  echo "LOAD: $LOAD"
   echo "EMBED_MODEL: $EMBED_MODEL"
-  echo "Z_DIM: $Z_DIM"
+  echo "EMBED_DIM: $EMBED_DIM"
+  echo "LATENT_DIM: $LATENT_DIM"
   echo "BATCH_SIZE: $BATCH_SIZE"
   echo "CVAE_EPOCHS: $CVAE_EPOCHS"
   echo "CVAE_LR: $CVAE_LR"
@@ -36,14 +38,15 @@ LOG_FILE="train_${DATA}_${RATIONALE_METHOD}_${KL_WEIGHT}_z${Z_DIM}.log"
   echo "OUTPUT: $OUTPUT"
   echo "DEVICE: $DEVICE"
   echo "==========================="
-} > "./log/${LOG_FILE}"
+} > "./log/cvae/${LOG_FILE}"
 
 # 실행
 nohup python train.py \
     --data "$DATA" \
-    --load "$LOAD" \
+    --load \
     --embed_model "$EMBED_MODEL" \
-    --z_dim $Z_DIM \
+    --embed_dim $EMBED_DIM \
+    --latent_dim $LATENT_DIM \
     --batch_size $BATCH_SIZE \
     --cvae_epochs $CVAE_EPOCHS \
     --cvae_lr $CVAE_LR \
@@ -53,4 +56,4 @@ nohup python train.py \
     --rationale_lr $RATIONALE_LR \
     --output "$OUTPUT" \
     --device "$DEVICE" \
-    > "./log/${LOG_FILE}" 2>&1 &
+    > "./log/cvae/${LOG_FILE}" 2>&1 &

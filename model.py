@@ -4,21 +4,14 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 class Encoder(nn.Module):
-    def __init__(self, q_dim=384, r_dim=384, latent_dim=256):
+    def __init__(self, q_dim=1024, r_dim=1024, latent_dim=256, hidden_dim=256):
         super(Encoder, self).__init__()
         self.input_dim = q_dim + r_dim
 
-        if latent_dim == 256:
-            self.fc1 = nn.Linear(self.input_dim, 512)
-            self.fc2 = nn.Linear(512, 256)
-            self.fc_mean = nn.Linear(256, latent_dim)
-            self.fc_logvar = nn.Linear(256, latent_dim)
-
-        elif latent_dim == 128:
-            self.fc1 = nn.Linear(self.input_dim, 256)
-            self.fc2 = nn.Linear(256, 128)
-            self.fc_mean = nn.Linear(128, latent_dim)
-            self.fc_logvar = nn.Linear(128, latent_dim)
+        self.fc1 = nn.Linear(self.input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_mean = nn.Linear(hidden_dim, latent_dim)
+        self.fc_logvar = nn.Linear(hidden_dim, latent_dim)
         
     def forward(self, q, r):
         x = torch.cat([q, r], dim=1)
@@ -29,21 +22,15 @@ class Encoder(nn.Module):
         return h, mean, logvar
 
 class ReasoningPolicy(nn.Module):
-    def __init__(self, q_dim=384, latent_dim=256):
+    def __init__(self, q_dim=1024, latent_dim=256, hidden_dim=256):
         super(ReasoningPolicy, self).__init__()
 
-        if latent_dim == 256:
-            self.fc1 = nn.Linear(q_dim, 256)
-            self.fc2 = nn.Linear(256, 256)
-            self.fc_mean = nn.Linear(256, latent_dim)
-            self.fc_logvar = nn.Linear(256, latent_dim)
+        self.fc1 = nn.Linear(q_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_mean = nn.Linear(hidden_dim, latent_dim)
+        self.fc_logvar = nn.Linear(hidden_dim, latent_dim)
 
-        elif latent_dim == 128:
-            self.fc1 = nn.Linear(q_dim, 256)
-            self.fc2 = nn.Linear(256, 128)
-            self.fc_mean = nn.Linear(128, latent_dim)
-            self.fc_logvar = nn.Linear(128, latent_dim)
-        
+
     def forward(self, q):
         h = F.relu(self.fc1(q))
         h = F.relu(self.fc2(h))
@@ -52,19 +39,13 @@ class ReasoningPolicy(nn.Module):
         return h, mean, logvar
 
 class Decoder(nn.Module):
-    def __init__(self, q_dim=384, latent_dim=256, r_emb_dim=384):
+    def __init__(self, q_dim=1024, latent_dim=256, hidden_dim=256):
         super(Decoder, self).__init__()
         self.input_dim = q_dim + latent_dim
 
-        if latent_dim == 256: # 640
-            self.fc1 = nn.Linear(self.input_dim, 512)
-            self.fc2 = nn.Linear(512, 256)
-            self.fc_out = nn.Linear(256, r_emb_dim)
-        
-        elif latent_dim == 128: # 512
-            self.fc1 = nn.Linear(self.input_dim, 256)
-            self.fc2 = nn.Linear(256, 128)
-            self.fc_out = nn.Linear(128, r_emb_dim)
+        self.fc1 = nn.Linear(self.input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_out = nn.Linear(hidden_dim, q_dim)
 
     def forward(self, q, z):
         x = torch.cat([q, z], dim=1)

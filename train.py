@@ -111,19 +111,62 @@ def train_policy_step(encoder, reasoning_policy, optimizer_policy, batch_q, batc
         
     return rationale_loss.item()
 
+def evaluate_test_set(encoder, decoder, reasoning_policy, test_loader, args):
+    encoder.eval()
+    decoder.eval()
+    reasoning_policy.eval()
+    total_recon_loss = 0.0
+    total_kl_loss = 0.0
+    total_policy_loss = 0.0
+    num_batches = 0
+    with torch.no_grad():
+        for batch_q, batch_r in test_loader:
+            batch_q = batch_q.to(args.device)
+            batch_r = batch_r.to(args.device)
+            # CVAE 평가: 인코더와 디코더를 통해 재구성 손실과 KL 손실 계산
+            _, enc_mean, enc_logvar = encoder(batch_q, batch_r)
+            z_enc = reparameterize(enc_mean, enc_logvar)
+            r_pred = decoder(batch_q, z_enc)
+            recon_loss = F.mse_loss(r_pred, batch_r, reduction='mean')
+            kl_loss = kl_divergence(enc_mean, enc_logvar)
+            # Reasoning Policy 평가: 학습 방식에 따라 손실 계산
+            if args.rationale_train_method == 'mse':
+                _, policy_mean, _ = reasoning_policy(batch_q)
+                policy_loss = F.mse_loss(policy_mean, z_enc, reduction='mean')
+            else:
+                _, target_mean, target_logvar = encoder(batch_q, batch_r)
+                _, policy_mean, policy_logvar = reasoning_policy(batch_q)
+                policy_loss = kl_divergence_two_gaussians(policy_mean, policy_logvar, target_mean, target_logvar)
+            total_recon_loss += recon_loss.item()
+            total_kl_loss += kl_loss.item()
+            total_policy_loss += policy_loss.item()
+            num_batches += 1
+    avg_recon_loss = total_recon_loss / num_batches
+    avg_kl_loss = total_kl_loss / num_batches
+    avg_policy_loss = total_policy_loss / num_batches
+    print("=== Test Set Evaluation ===")
+    print(f"Reconstruction Loss: {avg_recon_loss:.4f}")
+    print(f"KL Divergence: {avg_kl_loss:.4f}")
+    print(f"Policy Loss: {avg_policy_loss:.4f}")
+
 def main(args):
 
-    if args.load == False:
+    embed_id = args.embed_model.split("/")[-1]
+
+    if not args.load:
 
         # 1. Load and preprocess the data
 
-        if args.data == "gsm_math":
+        if args.data == "gsm":
 
             gsm_dataset = load_dataset("openai/gsm8k", "main", split="train")
 
             gsm_dataset = gsm_dataset.map(preprocess_gsm)
-            gsm_Q = [instruction.format(question=question) for question in gsm_dataset["question"]]
-            gsm_R = gsm_dataset["solution"]
+        
+            question = [instruction.format(question=question) for question in gsm_dataset["question"]]
+            rationale = gsm_dataset["solution"]
+        
+        elif args.data == "math":
 
             # Login using e.g. `huggingface-cli login` to access this dataset
             dataset1 = load_dataset("EleutherAI/hendrycks_math","algebra",split="train")
@@ -136,11 +179,8 @@ def main(args):
 
             math_dataset = concatenate_datasets([dataset1, dataset2, dataset3, dataset4, dataset5, dataset6, dataset7, gsm_dataset]).shuffle()
 
-            math_Q = [instruction.format(question=question) for question in math_dataset["problem"]]
-            math_R = math_dataset["solution"]
-
-            question = gsm_Q + math_Q
-            rationale = gsm_R + math_R
+            question = [instruction.format(question=question) for question in math_dataset["problem"]]
+            rationale = math_dataset["solution"]
         
         elif args.data == "numina":
 
@@ -152,10 +192,23 @@ def main(args):
         print(">>>Data preprocessing complete!")
 
         # 2. Embed data
-        embed_model = SentenceTransformer(args.embed_model)
-        
-        question_embeddings = embed_model.encode(question)
-        rationale_embeddings = embed_model.encode(rationale)
+
+        if args.embed_model == "sentence-transformers/all-MiniLM-L6-v2":
+            embed_model = SentenceTransformer(args.embed_model).to(args.device)
+
+            print(">>> Embedding Model Loaded!")
+            
+            question_embeddings = embed_model.encode(question).to(args.device)
+            rationale_embeddings = embed_model.encode(rationale).to(args.device)
+
+        elif args.embed_model == "jinaai/jina-embeddings-v3":
+            embed_model = SentenceTransformer(args.embed_model, trust_remote_code=True).to(args.device)
+
+            print(">>> Embedding Model Loaded!")
+
+            task = "separation"
+            question_embeddings = embed_model.encode(question, task=task, prompt_name=task, truncate_dim=1024)
+            rationale_embeddings = embed_model.encode(rationale, task=task, prompt_name=task, truncate_dim=1024)
 
         print("# Question embeddings shape:", question_embeddings.shape)
         print("# Rationale embeddings shape:", rationale_embeddings.shape)
@@ -163,8 +216,8 @@ def main(args):
         embed_output = args.output + "/embeddings"
         os.makedirs(embed_output, exist_ok=True)
 
-        np.save(embed_output + f"/{args.data}_question_embeddings.npy", question_embeddings)
-        np.save(embed_output + f"/{args.data}_rationale_embeddings.npy", rationale_embeddings)
+        np.save(embed_output + f"/{args.data}_question_embeddings_{embed_id}.npy", question_embeddings)
+        np.save(embed_output + f"/{args.data}_rationale_embeddings_{embed_id}.npy", rationale_embeddings)
 
         print(">>>Embeddings saved successfully!")
 
@@ -173,19 +226,18 @@ def main(args):
     device = args.device
 
     embed_output = args.output + "/embeddings"
-    question_embeddings = np.load(embed_output + f"/{args.data}_question_embeddings.npy")
-    rationale_embeddings = np.load(embed_output + f"/{args.data}_rationale_embeddings.npy")
+    question_embeddings = np.load(embed_output + f"/{args.data}_question_embeddings_{embed_id}.npy")
+    rationale_embeddings = np.load(embed_output + f"/{args.data}_rationale_embeddings_{embed_id}.npy")
     
     print(">>>Embeddings loaded successfully!")
 
-    q_dim = 384         # 질문 임베딩 차원
-    r_dim = 384         # 근거 임베딩 차원
-    latent_dim = args.z_dim         # 잠재 공간 차원
-    r_emb_dim = 384     # Decoder 출력 차원
+    q_dim = args.embed_dim        
+    r_dim = args.embed_dim         
+    latent_dim = args.latent_dim    
 
-    encoder = Encoder(q_dim, r_dim, latent_dim).to(device)
-    decoder = Decoder(q_dim, latent_dim, r_emb_dim).to(device)
-    reasoning_policy = ReasoningPolicy(q_dim, latent_dim).to(device)
+    encoder = Encoder(q_dim=q_dim, r_dim=r_dim, latent_dim=latent_dim).to(device)
+    decoder = Decoder(q_dim=q_dim, latent_dim=latent_dim).to(device)
+    reasoning_policy = ReasoningPolicy(q_dim=q_dim, latent_dim=latent_dim).to(device)
 
     optimizer_cvae = optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr=args.cvae_lr)
     optimizer_policy = optim.Adam(reasoning_policy.parameters(), lr=args.rationale_lr)
@@ -247,6 +299,8 @@ def main(args):
 
     print(">>>Training complete!")
 
+    # Test 데이터셋에 대한 평가를 수행할 수 있습니다.
+
     # 5. Save the model
 
     checkpoint_path = args.output + "/checkpoint/"
@@ -263,23 +317,51 @@ def main(args):
     }
 
     os.makedirs(checkpoint_path, exist_ok=True)
-    torch.save(checkpoint, checkpoint_path + f'{args.rationale_train_method}_{args.kl_weight}_z{args.z_dim}_model_train.pth')
+
+    if args.embed_model == "sentence-transformers/all-MiniLM-L6-v2":
+        torch.save(checkpoint, checkpoint_path + f'{args.data}_allmini_{args.rationale_train_method}_{args.kl_weight}_z{args.latent_dim}_model_train.pth')
+    else: # jinaai/jina-embeddings-v3
+        torch.save(checkpoint, checkpoint_path + f'{args.data}_jina_{args.rationale_train_method}_{args.kl_weight}_z{args.latent_dim}_model_train.pth')
 
     print(">>>Model saved successfully!")
 
+    # ----------------------------
+    # Test set 평가 코드 추가
+    # ----------------------------
+    # 여기서는 전체 데이터셋의 10%를 Test set으로 분리하여 평가합니다.
+    # from torch.utils.data import random_split
+    # test_dataset = load_dataset("openai/gsm8k", "main", split="test[:10%]")
+
+    # test_dataset = test_dataset.map(preprocess_gsm)
+
+    # test_question = [instruction.format(question=question) for question in test_dataset["question"]]
+    # test_rationale = test_dataset["solution"]
+
+    # embed_model = SentenceTransformer(args.embed_model, trust_remote_code=True).to(args.device)
+
+    # task = "separation"
+    # question_embeddings = embed_model.encode(test_question, task=task, prompt_name=task, truncate_dim=1024)
+    # rationale_embeddings = embed_model.encode(test_rationale, task=task, prompt_name=task, truncate_dim=1024)
+
+    # dataset = TensorDataset(torch.tensor(question_embeddings), torch.tensor(rationale_embeddings))
+    # batch_size = args.batch_size
+    # test_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    # evaluate_test_set(encoder, decoder, reasoning_policy, test_loader, args)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a CVAE model')
-    parser.add_argument('--data', type=str, default="gsm_math" ,help='training data')
-    parser.add_argument('--load', type=bool, default=True, help='Load embeddings')
-    parser.add_argument('--embed_model', type=str, default='sentence-transformers/all-MiniLM-L6-v2')
-    parser.add_argument("--z_dim", type=int, default=256, help="Dimension of the latent space")
-    parser.add_argument('--batch_size', type=int, default=1024, help='Batch size for training')
-    parser.add_argument('--cvae_epochs', type=int, default=1000, help='Number of epochs to train the CVAE')
+    parser.add_argument('--data', type=str, default="gsm" ,help='training data')
+    parser.add_argument('--load', action="store_true", help='Load embeddings')
+    parser.add_argument('--embed_model', type=str, default="jinaai/jina-embeddings-v3")
+    parser.add_argument('--embed_dim', type=int, default=1024, help='Dimension of the embedding')
+    parser.add_argument("--latent_dim", type=int, default=256, help="Dimension of the latent space")
+    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
+    parser.add_argument('--cvae_epochs', type=int, default=100, help='Number of epochs to train the CVAE')
     parser.add_argument('--cvae_lr', type=float, default=1e-4, help='Learning rate for the CVAE')
-    parser.add_argument('--kl_weight', type=float, default=4.0, help='KL divergence weight')
+    parser.add_argument('--kl_weight', type=float, default=1.0, help='KL divergence weight') 
     parser.add_argument('--rationale_train_method', type=str, default='kld', help='MSE or KLD for training the Rationale')
-    parser.add_argument('--rationale_epochs', type=int, default=1000, help='Number of epochs to train the Rationale')
+    parser.add_argument('--rationale_epochs', type=int, default=100, help='Number of epochs to train the Rationale')
     parser.add_argument('--rationale_lr', type=float, default=1e-4, help='Learning rate for the Rationale')
     parser.add_argument('--output', type=str, default="./output", help='Path to the output model')
     parser.add_argument('--device', type=str, default='cuda', help='Device to use for training (cpu or cuda)')

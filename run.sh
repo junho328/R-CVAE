@@ -65,7 +65,7 @@ do
       --method "$METHOD" \
       --output "$OUTPUT" \
       --gpu_memory_utilization $GPU_MEMORY \
-      >> "./log/cvae/${LOG_MODEL}/${LOG_FILE}" 2>&1
+      >> "./log/cvae/${LOG_MODEL}/${LOG_FILE}" 2>&1 &
 
   echo ">>> Run ${RUN} 종료됨."
 done
